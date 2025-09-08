@@ -1,0 +1,20 @@
+[project]
+name = "byraadsgpt"
+version = "0.1.0"
+description = "Docling-first document parsing for byraadsgpt"
+requires-python = ">=3.10"
+dependencies = [
+  "docling",
+]
+
+[tool.ruff]
+line-length = 100
+lint.select = ["E","F","I","UP"]
+format.quote-style = "single"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }   # force torch to come from the CPU index
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"

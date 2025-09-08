@@ -1,0 +1,6 @@
+repos:
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.12.10
+  hooks:
+    - id: ruff               # runs the linter, blocks commits on failures
+    - id: ruff-format        # formatter (invoked manually if needed)
