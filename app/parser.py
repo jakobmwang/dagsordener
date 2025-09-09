@@ -1,4 +1,4 @@
-# byraadsgpt/app/parser.py
+# byraadsindeks/app/parser.py
 from pathlib import Path
 from typing import NotRequired, TypedDict
 

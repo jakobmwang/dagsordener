@@ -1,7 +1,7 @@
 [project]
-name = "byraadsgpt"
+name = "byraadsindeks"
 version = "0.1.0"
-description = "Docling-first document parsing for byraadsgpt"
+description = "Docling-first document parsing for byraadsindeks"
 requires-python = ">=3.10"
 dependencies = [
   "docling",

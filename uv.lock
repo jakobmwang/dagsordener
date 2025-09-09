@@ -80,7 +80,7 @@ wheels = [
 ]
 
 [[package]]
-name = "byraadsgpt"
+name = "byraadsindeks"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

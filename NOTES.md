@@ -1,3 +1,3 @@
-# byraadsgpt ("ByrådsGPT")
+# byraadsindeks ("Byrådsindeks")
 
 ## Objective
