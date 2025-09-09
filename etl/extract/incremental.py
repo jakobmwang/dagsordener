@@ -75,20 +75,6 @@ def extract_frontpage_links(limit: int = 10, headless: bool = True) -> list[str]
         return hrefs
 
 
-def existing_meeting_ids(out_root: Path) -> set[str]:
-    """Collect meeting IDs that already have a meta.json under out_root."""
-    ids: set[str] = set()
-    if not out_root.exists():
-        return ids
-    for p in out_root.iterdir():
-        if not p.is_dir():
-            continue
-        meta = p / 'meta.json'
-        if meta.exists():
-            ids.add(p.name)
-    return ids
-
-
 def ingest_links(
     links: Iterable[str],
     *,
@@ -100,14 +86,15 @@ def ingest_links(
     """Ingest each meeting URL unless it already exists. Returns list of ingested IDs."""
     out_root = out_root.resolve()
     out_root.mkdir(parents=True, exist_ok=True)
-    already = existing_meeting_ids(out_root)
 
     ingested: list[str] = []
     for url in links:
         mid = parse_meeting_id_from_url(url)
-        if mid and mid in already:
-            print(f'[skip] {mid} already ingested')
-            continue
+        if mid:
+            meta_path = out_root / mid / 'meta.json'
+            if meta_path.exists():
+                print(f'[skip] {mid} already ingested')
+                continue
         try:
             meta = ingest_meeting(
                 meeting_url=url,
