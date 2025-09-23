@@ -8,6 +8,7 @@ dependencies = [
   "playwright",
   "httpx",
   "pydantic",
+  "rapidocr-onnxruntime",
 ]
 
 [tool.ruff]
