@@ -3,7 +3,7 @@
 Ingestion module: fetch all agreed files for a single meeting (by URL or id)
 
 Project layout (expected):
-  /home/waja/code/byraadsindeks/
+  /home/waja/code/dagsordener/
     etl/
       extract/ingestion.py          <- this file
     data/
@@ -34,12 +34,12 @@ Dependencies:
 CLI example:
   python -m etl.extract.ingestion \
     --url "https://dagsordener.aarhus.dk/vis?…&id=<GUID>" \
-    --out /home/waja/code/byraadsindeks/data/raw/meetings
+    --out /home/waja/code/dagsordener/data/raw/meetings
   # or
   python -m etl.extract.ingestion \
     --id <GUID> \
     --kind referat \
-    --out /home/waja/code/byraadsindeks/data/raw/meetings
+    --out /home/waja/code/dagsordener/data/raw/meetings
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
 BASE = 'https://dagsordener.aarhus.dk'
-USER_AGENT = 'byraadsindeks-ingester/0.1 (+https://aarhus.dk)'
+USER_AGENT = 'dagsordener-ingester/0.1 (+https://aarhus.dk)'
 DEFAULT_RPS = 1.5  # ~1-2 req/s
 
 # --------------------------- utils ---------------------------

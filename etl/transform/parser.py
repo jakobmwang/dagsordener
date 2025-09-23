@@ -1,4 +1,4 @@
-# byraadsindeks/app/parser.py
+# dagsordener/app/parser.py
 from pathlib import Path
 from typing import NotRequired, TypedDict
 

@@ -1,7 +1,7 @@
 [project]
-name = "byraadsindeks"
+name = "dagsordener"
 version = "0.1.0"
-description = "Docling-first document parsing for byraadsindeks"
+description = "Docling-first document parsing for dagsordener"
 requires-python = ">=3.10"
 dependencies = [
   "docling",
