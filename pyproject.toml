@@ -1,14 +1,14 @@
 [project]
 name = "dagsordener"
 version = "0.1.0"
-description = "Docling-first document parsing for dagsordener"
-requires-python = ">=3.10"
+description = "Document parsing for dagsordener"
+requires-python = ">=3.10, <=3.12"
 dependencies = [
+  "torch",
   "docling",
   "playwright",
   "httpx",
   "pydantic",
-  "rapidocr-onnxruntime",
 ]
 
 [tool.ruff]
@@ -18,10 +18,3 @@ format.quote-style = "single"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
-
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }   # force torch to come from the CPU index
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
