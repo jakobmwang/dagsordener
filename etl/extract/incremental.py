@@ -3,14 +3,15 @@
 Incremental fetcher: visit frontpage and ingest latest meetings.
 
 What it does:
-- Opens https://dagsordener.aarhus.dk/ (Playwright; dynamic DOM)
-- Extracts the 10 meeting links shown on the frontpage list
+- Opens the provided frontpage URL (Playwright; dynamic DOM)
+- Extracts the latest meeting links shown on the frontpage list
 - Calls etl.extract.ingestion.ingest_meeting() for each
-- Skips meetings that already exist under <out_root>/<meeting-id>/meta.json
+- Skips meetings that already exist under <out_root>/<agenda|minutes>/<meeting-id>/meta.json
 
 Usage:
   python -m etl.extract.incremental \
-    --out data/raw/meetings \
+    --url https://dagsordener.aarhus.dk/ \
+    --out data/raw/meetings/aarhus \
     --limit 10
 
 Notes:
@@ -23,11 +24,11 @@ from __future__ import annotations
 import argparse
 from collections.abc import Iterable
 from pathlib import Path
+from urllib.parse import urljoin
 
 from playwright.sync_api import TimeoutError as PWTimeout
 
 from etl.extract.ingestion import (
-    BASE,
     DEFAULT_RPS,
     browser_context,
     ingest_meeting,
@@ -35,16 +36,12 @@ from etl.extract.ingestion import (
 )
 
 
-def normalize_url(href: str) -> str:
-    if not href:
-        return href
-    if href.startswith('http://') or href.startswith('https://'):
-        return href
-    # site uses root-relative hrefs
-    return BASE.rstrip('/') + href
-
-
-def extract_frontpage_links(limit: int = 10, headless: bool = True) -> list[str]:
+def extract_frontpage_links(
+    frontpage_url: str,
+    *,
+    limit: int = 10,
+    headless: bool = True,
+) -> list[str]:
     """Return up to `limit` absolute meeting URLs from the frontpage.
 
     Selectors are based on current DOM where latest meetings are rendered as
@@ -53,7 +50,7 @@ def extract_frontpage_links(limit: int = 10, headless: bool = True) -> list[str]
     with browser_context(headless=headless) as ctx:
         page = ctx.new_page()
         page.set_default_timeout(15000)
-        page.goto(BASE + '/')
+        page.goto(frontpage_url)
         # Wait for the dynamic list to appear
         try:
             page.wait_for_selector('#resultater a.searchresult', state='visible', timeout=20000)
@@ -71,7 +68,7 @@ def extract_frontpage_links(limit: int = 10, headless: bool = True) -> list[str]
             a = anchors.nth(i)
             href = (a.get_attribute('href') or '').strip()
             if href:
-                hrefs.append(normalize_url(href))
+                hrefs.append(urljoin(frontpage_url, href))
         return hrefs
 
 
@@ -91,9 +88,14 @@ def ingest_links(
     for url in links:
         mid = parse_meeting_id_from_url(url)
         if mid:
-            meta_path = out_root / mid / 'meta.json'
-            if meta_path.exists():
-                print(f'[skip] {mid} already ingested')
+            existing_meta = None
+            for kind_dir in ('agenda', 'minutes', 'other'):
+                meta_path = out_root / kind_dir / mid / 'meta.json'
+                if meta_path.exists():
+                    existing_meta = meta_path
+                    break
+            if existing_meta:
+                print(f'[skip] {mid} already ingested ({existing_meta.parent})')
                 continue
         try:
             meta = ingest_meeting(
@@ -114,9 +116,16 @@ def ingest_links(
 
 
 def _main():
-    ap = argparse.ArgumentParser(description='Incremental frontpage fetch (latest 10 meetings)')
+    ap = argparse.ArgumentParser(description='Incremental frontpage fetch (latest meetings)')
     ap.add_argument(
-        '--out', default='data/raw/meetings', help='Output root (default: data/raw/meetings)'
+        '--url',
+        required=True,
+        help='Frontpage URL (e.g. https://dagsordener.aarhus.dk/)',
+    )
+    ap.add_argument(
+        '--out',
+        required=True,
+        help='Output city root (e.g. data/raw/meetings/aarhus)',
     )
     ap.add_argument(
         '--limit', type=int, default=10, help='How many frontpage links to process (default 10)'
@@ -131,7 +140,11 @@ def _main():
     )
     args = ap.parse_args()
 
-    links = extract_frontpage_links(limit=args.limit, headless=not args.headful)
+    links = extract_frontpage_links(
+        args.url,
+        limit=args.limit,
+        headless=not args.headful,
+    )
     if args.print_only:
         for u in links:
             print(u)

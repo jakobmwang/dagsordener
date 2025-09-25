@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-Ingestion module: fetch all agreed files for a single meeting (by URL or id)
+Ingestion module: fetch all agreed files for a single meeting (by URL)
 
 Project layout (expected):
   /home/waja/code/dagsordener/
     etl/
       extract/ingestion.py          <- this file
     data/
-      raw/                          <- output root (default)
+      raw/
+        meetings/
+          <city>/
+            agenda/
+            minutes/
 
 What it does (MVP, lean):
 - Loads a meeting page (Playwright) and parses:
@@ -34,12 +38,7 @@ Dependencies:
 CLI example:
   python -m etl.extract.ingestion \
     --url "https://dagsordener.aarhus.dk/vis?…&id=<GUID>" \
-    --out /home/waja/code/dagsordener/data/raw/meetings
-  # or
-  python -m etl.extract.ingestion \
-    --id <GUID> \
-    --kind referat \
-    --out /home/waja/code/dagsordener/data/raw/meetings
+    --out data/raw/meetings/aarhus
 """
 
 from __future__ import annotations
@@ -50,6 +49,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+import shutil
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -57,9 +57,9 @@ from pathlib import Path
 import httpx
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
+from urllib.parse import urljoin, urlparse
 
-BASE = 'https://dagsordener.aarhus.dk'
-USER_AGENT = 'dagsordener-ingester/0.1 (+https://aarhus.dk)'
+USER_AGENT = 'dagsordener-ingester/0.1'
 DEFAULT_RPS = 1.5  # ~1-2 req/s
 
 # --------------------------- utils ---------------------------
@@ -104,6 +104,13 @@ def parse_meeting_id_from_url(url: str) -> str | None:
         return m.group(1)
     m2 = RE_GUID.search(url)
     return m2.group(1) if m2 else None
+
+
+def extract_origin(url: str) -> str:
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError(f'Meeting URL must be absolute (got: {url!r})')
+    return f'{parsed.scheme}://{parsed.netloc}'
 
 
 # --------------------------- datamodel ---------------------------
@@ -182,7 +189,7 @@ def browser_context(headless: bool = True):
 # --------------------------- DOM parsing ---------------------------
 
 
-def parse_meeting_dom(page) -> dict:
+def parse_meeting_dom(page, origin: str) -> dict:
     """Return dict with meeting fields + list of items (sans downloads)."""
     result: dict = {
         'meeting_id': None,
@@ -285,8 +292,8 @@ def parse_meeting_dom(page) -> dict:
                     m = RE_GUID.search(href or '')
                     if m:
                         aid = m.group(1)
-                if not href.startswith('http'):
-                    href = BASE.rstrip('/') + href
+                if href:
+                    href = urljoin(origin, href)
                 attachments.append(
                     {
                         'attachment_id': aid or hashlib.sha1(href.encode()).hexdigest()[:12],
@@ -301,8 +308,8 @@ def parse_meeting_dom(page) -> dict:
             for a in row.locator("a[href$='.mp3']").all():
                 href = a.get_attribute('href') or ''
                 title_a = (a.inner_text() or '').strip() or None
-                if href and not href.startswith('http'):
-                    href = BASE.rstrip('/') + href
+                if href:
+                    href = urljoin(origin, href)
                 audio.append(
                     {
                         'audio_id': RE_GUID.search(href).group(1)
@@ -317,8 +324,7 @@ def parse_meeting_dom(page) -> dict:
                 for el in row.locator(sel).all():
                     href = el.get_attribute('src') or ''
                     if href.endswith('.mp3'):
-                        if not href.startswith('http'):
-                            href = BASE.rstrip('/') + href
+                        href = urljoin(origin, href)
                         audio.append(
                             {
                                 'audio_id': RE_GUID.search(href).group(1)
@@ -349,15 +355,19 @@ MIME_EXT = {
 }
 
 
-def normalize_attachment_url(url: str) -> str:
-    # flip redirectDirectlyToPdf to true when present/possible
-    if 'redirectDirectlyToPdf=' in url:
-        url = re.sub(r'redirectDirectlyToPdf=(?:false|0)', 'redirectDirectlyToPdf=true', url)
+def normalize_attachment_url(url: str, origin: str) -> str:
+    if not url:
         return url
-    # If URL is /vis/pdf/bilag/<id>/ add ?redirectDirectlyToPdf=true
-    if '/vis/pdf/bilag/' in url and '?' not in url:
-        url = url + '?redirectDirectlyToPdf=true'
-    return url
+    absolute = urljoin(origin, url)
+    if 'redirectDirectlyToPdf=' in absolute:
+        return re.sub(
+            r'redirectDirectlyToPdf=(?:false|0)',
+            'redirectDirectlyToPdf=true',
+            absolute,
+        )
+    if absolute.startswith(origin) and '/vis/pdf/bilag/' in absolute and '?' not in absolute:
+        return absolute + '?redirectDirectlyToPdf=true'
+    return absolute
 
 
 def stream_download(
@@ -366,8 +376,12 @@ def stream_download(
     out_path: Path,
     rate: RateLimiter,
     headers: dict[str, str] | None = None,
+    *,
+    force: bool = False,
 ) -> FileRef:
     ensure_dir(out_path.parent)
+    if force and out_path.exists():
+        out_path.unlink()
     # If exists, compute sha256 and size and return without re-downloading
     if out_path.exists():
         sha, size = sha256_file(out_path)
@@ -392,20 +406,31 @@ def stream_download(
 
 def ingest_meeting(
     *,
-    meeting_url: str | None = None,
-    meeting_id: str | None = None,
-    out_root: Path | str = 'data/raw/meetings',
+    meeting_url: str,
+    out_root: Path | str | None = None,
     with_audio: bool = True,
     headless: bool = True,
     rps: float = DEFAULT_RPS,
+    force: bool = False,
 ) -> MeetingMeta:
     """
-    Ingest a single meeting by URL or meeting_id.
-    Writes files under <out_root>/<meeting-id>/ and returns MeetingMeta.
-    """
-    if not meeting_url and not meeting_id:
-        raise ValueError('Provide meeting_url or meeting_id')
+    Ingest a single meeting by URL.
+    Writes files under <out_root>/<agenda|minutes>/<meeting-id>/ and returns MeetingMeta.
 
+    Parameters:
+        meeting_url: Absolute meeting page URL.
+        out_root: City-specific output root (e.g. data/raw/meetings/aarhus).
+        with_audio: Download audio files when available.
+        headless: Run browser in headless mode.
+        rps: Download rate limit.
+        force: When true, re-downloads data even if files already exist.
+    """
+    if not meeting_url:
+        raise ValueError('Provide meeting_url (absolute URL)')
+    if out_root is None:
+        raise ValueError('Provide out_root path')
+
+    origin = extract_origin(meeting_url)
     out_root = Path(out_root)
     ensure_dir(out_root)
 
@@ -415,44 +440,49 @@ def ingest_meeting(
         page = context.new_page()
         page.set_default_timeout(30000)
         resolved_url = meeting_url
-        # If only meeting_id is provided, try to generate a view URL
-        if not resolved_url and meeting_id:
-            # Best effort: there's no stable route aside from search or bookmarks,
-            # but in practice caller will pass meeting_url. We'll still proceed with downloads only.
-            resolved_url = f'{BASE}/vis?id={meeting_id}'
-        # Navigate & wait DOM
-        if resolved_url:
-            try:
-                page.goto(resolved_url, wait_until='networkidle')
-                page.wait_for_selector('#dagsordenDetaljer tr.punktrow', timeout=15000)
-            except PWTimeout:
-                # try domcontentloaded as fallback
-                with contextlib.suppress(Exception):
-                    page.goto(resolved_url, wait_until='domcontentloaded')
+        try:
+            page.goto(resolved_url, wait_until='networkidle')
+            page.wait_for_selector('#dagsordenDetaljer tr.punktrow', timeout=15000)
+        except PWTimeout:
+            # try domcontentloaded as fallback
+            with contextlib.suppress(Exception):
+                page.goto(resolved_url, wait_until='domcontentloaded')
         # parse DOM
-        parsed = parse_meeting_dom(page) if resolved_url else {'items': []}
+        parsed = parse_meeting_dom(page, origin)
 
         # ensure meeting_id
-        mid = parsed.get('meeting_id') or meeting_id
+        mid = parsed.get('meeting_id')
         if not mid and meeting_url:
             mid = parse_meeting_id_from_url(meeting_url)
         if not mid:
             raise RuntimeError('Could not determine meeting_id')
 
-        # Build output dirs
-        meeting_dir = out_root / mid
+        # Build output dirs (city root supplied via out_root)
+        kind_value = (parsed.get('kind') or '').lower()
+        kind_folder = 'agenda' if kind_value == 'dagsorden' else 'minutes' if kind_value == 'referat' else 'other'
+        meeting_dir = out_root / kind_folder / mid
+        if force and meeting_dir.exists():
+            shutil.rmtree(meeting_dir)
         ensure_dir(meeting_dir)
 
         # HTTP client
         rate = RateLimiter(rps)
-        headers = {'User-Agent': USER_AGENT, 'Referer': resolved_url or BASE}
+        headers = {'User-Agent': USER_AGENT, 'Referer': resolved_url}
         client = httpx.Client(headers=headers)
 
         try:
             # full.pdf
-            full_url = f'{BASE}/vis/pdf/dagsorden/{mid}?redirectDirectlyToPdf=true'
+            full_url = urljoin(
+                origin,
+                f'/vis/pdf/dagsorden/{mid}?redirectDirectlyToPdf=true',
+            )
             full_ref = stream_download(
-                client, full_url, meeting_dir / 'full.pdf', rate, headers=headers
+                client,
+                full_url,
+                meeting_dir / 'full.pdf',
+                rate,
+                headers=headers,
+                force=force,
             )
         except Exception as e:
             errors.append({'stage': 'full.pdf', 'error': str(e)})
@@ -473,7 +503,10 @@ def ingest_meeting(
             ensure_dir(item_dir)
             # item.pdf
             item_pdf_url = (
-                f'{BASE}/vis/pdf/dagsordenpunkt/{item_id}?redirectDirectlyToPdf=true'
+                urljoin(
+                    origin,
+                    f'/vis/pdf/dagsordenpunkt/{item_id}?redirectDirectlyToPdf=true',
+                )
                 if item_id
                 else None
             )
@@ -484,7 +517,12 @@ def ingest_meeting(
             else:
                 try:
                     item_ref = stream_download(
-                        client, item_pdf_url, item_dir / 'item.pdf', rate, headers=headers
+                        client,
+                        item_pdf_url,
+                        item_dir / 'item.pdf',
+                        rate,
+                        headers=headers,
+                        force=force,
                     )
                 except Exception as e:
                     item_ref = FileRef(url=item_pdf_url, path=str(item_dir / 'item.pdf'))
@@ -495,11 +533,18 @@ def ingest_meeting(
             for att in it.get('attachments', []):
                 att_id = att.get('attachment_id')
                 att_title = att.get('title')
-                att_url = normalize_attachment_url(att.get('url'))
+                att_url = normalize_attachment_url(att.get('url'), origin)
                 # Path & ext
                 outp = item_dir / 'attachments' / f'{att_id}.pdf'
                 try:
-                    file_ref = stream_download(client, att_url, outp, rate, headers=headers)
+                    file_ref = stream_download(
+                        client,
+                        att_url,
+                        outp,
+                        rate,
+                        headers=headers,
+                        force=force,
+                    )
                 except Exception as e:
                     file_ref = FileRef(url=att_url, path=str(outp))
                     errors.append(
@@ -525,7 +570,14 @@ def ingest_meeting(
                     # guess ext from URL or mime later
                     outp = item_dir / 'audio' / f'{aid}.mp3'
                     try:
-                        file_ref = stream_download(client, aurl, outp, rate, headers=headers)
+                        file_ref = stream_download(
+                            client,
+                            aurl,
+                            outp,
+                            rate,
+                            headers=headers,
+                            force=force,
+                        )
                     except Exception as e:
                         file_ref = FileRef(url=aurl, path=str(outp))
                         errors.append(
@@ -551,7 +603,7 @@ def ingest_meeting(
     # Meeting meta
     meta = MeetingMeta(
         meeting_id=mid,
-        meeting_url=resolved_url or f'{BASE}/vis?id={mid}',
+        meeting_url=resolved_url,
         kind=parsed.get('kind'),
         committee=parsed.get('committee'),
         place=parsed.get('place'),
@@ -578,14 +630,13 @@ def ingest_meeting(
 
 
 def _main():
-    ap = argparse.ArgumentParser(description='Ingest one meeting by URL or id')
-    ap.add_argument('--url', dest='url', help='Meeting page URL (preferred)')
-    ap.add_argument('--id', dest='mid', help='Meeting GUID (if URL not provided)')
+    ap = argparse.ArgumentParser(description='Ingest one meeting by URL')
+    ap.add_argument('--url', dest='url', required=True, help='Meeting page URL')
     ap.add_argument(
         '--out',
         dest='out',
-        default='data/raw/meetings',
-        help='Output root (default: data/raw/meetings)',
+        required=True,
+        help='Output city root (e.g. data/raw/meetings/aarhus)',
     )
     ap.add_argument('--no-audio', action='store_true', help='Do not download audio MP3s')
     ap.add_argument('--headful', action='store_true', help='Show browser (not headless)')
@@ -596,7 +647,6 @@ def _main():
 
     meta = ingest_meeting(
         meeting_url=args.url,
-        meeting_id=args.mid,
         out_root=args.out,
         with_audio=not args.no_audio,
         headless=not args.headful,
