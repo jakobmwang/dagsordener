@@ -17,7 +17,7 @@ Aarhus Kommune ønsker at styrke tilgængeligheden af dagsordener, referater og 
 * Effektiv hybrid søgning (BM25 + ANN), med facetter på udvalg, ESDH-sagsnumre, dokumenttyper og dato.
 * Konsistent berigelse af data i mindst én dimension, fx tagging af beslutningers politiske fordeling.
 * Transparent præsentation af resultater (snippets med kilde).
-* POC/MVP der kan evalueres kvantitativt på præcision og recall.
+* POC/MVP der kan evalueres kvantitativt med relevante metrics (e.g. MRR, Recall@k).
 
 **Afgrænsning**
 
@@ -27,7 +27,7 @@ Aarhus Kommune ønsker at styrke tilgængeligheden af dagsordener, referater og 
 
 **Forudsætninger**
 
-* API-adgang til FirstAgenda Publication.
+* API-adgang til åbne data i FirstAgenda.
 * Adgang til domæneviden (sekretariatets arbejdsgange, rettelsespraksis, sagsnumre).
 * Koordination med FirstAgenda om deres roadmap, så vi ikke bygger parallelt modstridende løsninger.
 * Klar afstemning af ambitionsniveau og scope (demo vs. driftsklar løsning).
@@ -40,10 +40,11 @@ Aarhus Kommune ønsker at styrke tilgængeligheden af dagsordener, referater og 
 * Systemejer af FirstAgenda (og evt. leverandør).
 * Fælles it og digitalisering (teknisk implementering, drift).
 
-**Nuværende behovsstatus**
+**Roadmap**
 
-1. <font color="red">API-adgang (servicekonto).</font>
+1. ✅ Server med GPU til udvikling.
+1. ➡️ API-adgang (servicekonto).
 2. Kort møde med sekretariatet om arbejdsgange og datapraksis.
 3. Dialog med FirstAgenda om deres roadmap.
 4. Udarbejd POC/MVP med afsæt i pkt. 1-3.
-5. Evaluer POC kvantitativt.
+5. Kvantitativ evaluering fulgt af brugertest.
