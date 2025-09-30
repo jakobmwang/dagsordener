@@ -33,8 +33,8 @@ Aarhus Kommune ønsker at styrke tilgængeligheden af dagsordener, referater og 
 
 **Interessenter**
 
-* Byrådssekretariatet og udvalg (domæneviden, brugere).
 * Politisk ledelse (brugere af resultatet).
+* Byrådssekretariatet og udvalg (domæneviden, brugere).
 * Systemejer af FirstAgenda (og evt. leverandør).
 * Fælles it og digitalisering (teknisk implementering, drift).
 
