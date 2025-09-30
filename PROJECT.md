@@ -46,5 +46,5 @@ Aarhus Kommune ønsker at styrke tilgængeligheden af dagsordener, referater og 
 1. ➡️ API-adgang (servicekonto).
 2. Kort møde med sekretariatet om arbejdsgange og datapraksis.
 3. Dialog med FirstAgenda om deres roadmap.
-4. Udarbejd POC/MVP med afsæt i pkt. 1-3.
+4. Udarbejd POC/MVP med afsæt i pkt. 1-4.
 5. Kvantitativ evaluering fulgt af brugertest.
