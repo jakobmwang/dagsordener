@@ -1,7 +1,5 @@
 # Projektgrundlag: "ByrådsGPT"/"Byrådschat"/"ByrådsBOT"
 
-Af: Jakob Mørup Wang (<waja@aarhus.dk>), Fælles IT og Digitalisering, Aarhus Kommune
-
 **Baggrund**
 
 Aarhus Kommune ønsker at styrke tilgængeligheden af dagsordener, referater og bilag for politikere, medarbejdere og potentielt borgere. De eksisterende løsninger er baseret på FirstAgenda Publication, hvor data publiceres via web. Der er interesse for at bygge en AI-understøttet løsning til præcise, kontekstualiserede svar. Erfaringer viser dog, at værdien af denne type systemer kun i mindre grad er knyttet til sprogmodellen, men i større grad til den tilgængelige kontekst, der skabes gennem data engineering og flow design.
