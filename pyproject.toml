@@ -1,13 +1,13 @@
 [project]
 name = "dagsordener"
 version = "0.1.0"
-description = "Document parsing for dagsordener"
+description = "Prototype for improved indexing of dagsordener.aarhus.dk data"
 requires-python = ">=3.10, <=3.12"
 dependencies = [
   "torch",
-  "docling",
   "playwright",
   "httpx",
+  "beautifulsoup4",
   "pydantic",
 ]
 
