@@ -8,6 +8,9 @@ dependencies = [
   "playwright",
   "httpx",
   "beautifulsoup4",
+  "markdownify",
+  "FlagEmbedding",
+  "qdrant-client",
   "pydantic",
 ]
 
