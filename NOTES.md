@@ -1,3 +1,0 @@
-# dagsordener ("Byrådsindeks")
-
-## Objective
