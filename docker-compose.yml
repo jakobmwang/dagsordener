@@ -7,5 +7,33 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  flagserve:
+    image: jakobmwang/flagserve:latest
+    shm_size: 2gb
+    ports:
+      - "8273:8273"
+    environment:
+      - BGE_EMBED_MODEL=${BGE_EMBED_MODEL:-BAAI/bge-m3}
+      - BGE_RERANK_MODEL=${BGE_RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      - BGE_MAX_BATCH_SIZE=${BGE_MAX_BATCH_SIZE:-64}
+      - BGE_BATCH_TIMEOUT_S=${BGE_BATCH_TIMEOUT_S:-0.03}
+      - BGE_USE_FP16=${BGE_USE_FP16:-true}
+      - BGE_ENABLE_EMBED=${BGE_ENABLE_EMBED:-true}
+      - BGE_ENABLE_RERANK=${BGE_ENABLE_RERANK:-true}
+      - FLAGSERVE_DEVICE=${FLAGSERVE_DEVICE:-cuda}
+      - FLAGSERVE_API_KEY=${FLAGSERVE_API_KEY:-}
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - hf-cache:/home/appuser/.cache/huggingface
+    restart: unless-stopped
+
 volumes:
   qdrant_data:
+  hf-cache:

@@ -1,8 +1,11 @@
 """Qdrant operations for storing and retrieving chunks."""
 
+import os
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
+    Datatype,
     FieldCondition,
     Filter,
     MatchValue,
@@ -13,13 +16,34 @@ from qdrant_client.models import (
     VectorParams,
 )
 
-COLLECTION = "dagsordener"
+URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+COLLECTION = os.getenv("QDRANT_COLLECTION", "dagsordener")
 DENSE_DIM = 1024  # BGE-M3 dimension
 
 
-def get_client(url: str = "http://localhost:6333") -> QdrantClient:
+def get_client(url: str | None = None) -> QdrantClient:
     """Get Qdrant client."""
-    return QdrantClient(url=url)
+    return QdrantClient(url=url or URL)
+
+
+def _ensure_payload_indexes(client: QdrantClient):
+    desired = {
+        "meeting_id": PayloadSchemaType.KEYWORD,
+        "udvalg": PayloadSchemaType.KEYWORD,
+        "sagsnummer": PayloadSchemaType.KEYWORD,
+        "datetime": PayloadSchemaType.DATETIME,
+    }
+    collection_info = client.get_collection(COLLECTION)
+    payload_schema = collection_info.payload_schema or {}
+    for field, schema_type in desired.items():
+        existing = payload_schema.get(field)
+        if existing is None:
+            client.create_payload_index(COLLECTION, field, field_schema=schema_type)
+        elif existing.data_type != schema_type:
+            print(
+                f"  Payload index '{field}' is {existing.data_type}, "
+                f"expected {schema_type}. Consider rebuilding the index."
+            )
 
 
 def ensure_collection(client: QdrantClient):
@@ -30,17 +54,19 @@ def ensure_collection(client: QdrantClient):
         client.create_collection(
             collection_name=COLLECTION,
             vectors_config={
-                "dense": VectorParams(size=DENSE_DIM, distance=Distance.COSINE)
+                "dense": VectorParams(
+                    size=DENSE_DIM,
+                    distance=Distance.COSINE,
+                    datatype=Datatype.FLOAT16,
+                )
             },
             sparse_vectors_config={
                 "sparse": SparseVectorParams()
             },
         )
-        # Create payload indexes for filtering
-        client.create_payload_index(COLLECTION, "meeting_id", field_schema=PayloadSchemaType.KEYWORD)
-        client.create_payload_index(COLLECTION, "udvalg", field_schema=PayloadSchemaType.KEYWORD)
-        client.create_payload_index(COLLECTION, "sagsnummer", field_schema=PayloadSchemaType.KEYWORD)
-        client.create_payload_index(COLLECTION, "datetime", field_schema=PayloadSchemaType.KEYWORD)
+        _ensure_payload_indexes(client)
+    else:
+        _ensure_payload_indexes(client)
 
 
 def meeting_exists(client: QdrantClient, meeting_id: str) -> bool:

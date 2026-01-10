@@ -2,7 +2,6 @@
 
 import argparse
 import re
-import sys
 
 from src.scraper import (
     create_browser_context,
@@ -14,7 +13,7 @@ from src.scraper import (
 )
 from src.parser import parse_meeting
 from src.embedder import Embedder
-from src.qdrant import get_client, ensure_collection, meeting_exists, upsert_punkter
+from src.qdrant import URL, get_client, ensure_collection, meeting_exists, upsert_punkter
 
 
 def process_meeting(page, url: str, embedder: Embedder, qdrant_client) -> int:
@@ -65,7 +64,7 @@ def run_incremental(args):
     playwright, browser, page = create_browser_context()
     qdrant_client = get_client(args.qdrant_url)
     ensure_collection(qdrant_client)
-    embedder = Embedder(device=args.device)
+    embedder = Embedder()
 
     try:
         urls = get_meeting_links(page)
@@ -88,7 +87,7 @@ def run_backfill(args):
     playwright, browser, page = create_browser_context()
     qdrant_client = get_client(args.qdrant_url)
     ensure_collection(qdrant_client)
-    embedder = Embedder(device=args.device)
+    embedder = Embedder()
 
     try:
         if args.year:
@@ -128,15 +127,9 @@ def main():
     )
     parser.add_argument(
         "--qdrant-url",
-        default="http://localhost:6333",
+        default=URL,
         help="Qdrant URL",
     )
-    parser.add_argument(
-        "--device",
-        default="cpu",
-        help="Device for embeddings (cpu, cuda)",
-    )
-
     args = parser.parse_args()
 
     if args.mode == "incremental":

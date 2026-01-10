@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright, Page
 BASE_URL = "https://dagsordener.aarhus.dk"
 
 
-def _scrape_links_from_current_page(page: Page) -> list[str]:
+def scrape_links_from_current_page(page: Page) -> list[str]:
     """Scrapes all meeting links from the currently loaded page."""
     page.locator("a[href*='/vis?']").first.wait_for(timeout=10000)
 
@@ -22,7 +22,7 @@ def _scrape_links_from_current_page(page: Page) -> list[str]:
     return list(dict.fromkeys(urls))
 
 
-def _scroll_to_end(page: Page, link_selector: str) -> None:
+def scroll_to_end(page: Page, link_selector: str) -> None:
     """Scroll until no new content appears (few stable rounds in a row)."""
     links = page.locator(link_selector)
     last_count = links.count()
@@ -50,7 +50,7 @@ def _scroll_to_end(page: Page, link_selector: str) -> None:
 def get_meeting_links(page: Page, url: str = BASE_URL) -> list[str]:
     """Get meeting links from a listing page (frontpage or year filter)."""
     page.goto(url)
-    return _scrape_links_from_current_page(page)
+    return scrape_links_from_current_page(page)
 
 
 def get_meeting_html(page: Page, url: str) -> str:
@@ -94,10 +94,10 @@ def get_year_meeting_links(page: Page, year: int) -> list[str]:
     page.goto(url)
     page.locator("a[href*='/vis?']").first.wait_for(timeout=10000)
 
-    _scroll_to_end(page, "a[href*='/vis?']")
+    scroll_to_end(page, "a[href*='/vis?']")
 
     # After scrolling, scrape all the links from the fully-loaded page
-    return _scrape_links_from_current_page(page)
+    return scrape_links_from_current_page(page)
 
 
 def create_browser_context():
