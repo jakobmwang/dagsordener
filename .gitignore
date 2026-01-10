@@ -1,6 +1,7 @@
 .claude
 .env
 .venv/
+samples/
 __pycache__/
 backfill.log
 search.py
