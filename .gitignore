@@ -1,3 +1,7 @@
+.claude
 .env
 .venv/
+examples/
 __pycache__/
+backfill.log
+search.py

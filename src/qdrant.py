@@ -3,13 +3,14 @@
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PayloadSchemaType,
     PointStruct,
     SparseVector,
     SparseVectorParams,
     VectorParams,
-    Filter,
-    FieldCondition,
-    MatchValue,
 )
 
 COLLECTION = "dagsordener"
@@ -36,10 +37,10 @@ def ensure_collection(client: QdrantClient):
             },
         )
         # Create payload indexes for filtering
-        client.create_payload_index(COLLECTION, "meeting_id", "keyword")
-        client.create_payload_index(COLLECTION, "udvalg", "keyword")
-        client.create_payload_index(COLLECTION, "sagsnummer", "keyword")
-        client.create_payload_index(COLLECTION, "datetime", "keyword")
+        client.create_payload_index(COLLECTION, "meeting_id", field_schema=PayloadSchemaType.KEYWORD)
+        client.create_payload_index(COLLECTION, "udvalg", field_schema=PayloadSchemaType.KEYWORD)
+        client.create_payload_index(COLLECTION, "sagsnummer", field_schema=PayloadSchemaType.KEYWORD)
+        client.create_payload_index(COLLECTION, "datetime", field_schema=PayloadSchemaType.KEYWORD)
 
 
 def meeting_exists(client: QdrantClient, meeting_id: str) -> bool:
@@ -77,6 +78,7 @@ def upsert_punkter(client: QdrantClient, punkter: list[dict], embeddings: dict):
                 "title": punkt["title"],
                 "sagsnummer": punkt["sagsnummer"],
                 "content_md": punkt["content_md"],
+                "links": punkt["links"],  # indexed URLs from content
                 "meeting_id": punkt["meeting_id"],
                 "udvalg": punkt["udvalg"],
                 "datetime": punkt["datetime"],

@@ -47,13 +47,13 @@ class Embedder:
             return_colbert_vecs=False,
         )
 
-        dense = output["dense_vecs"].tolist()
+        dense = output["dense_vecs"].tolist()  # type: ignore
 
         # Convert sparse format
         sparse = []
         for sp in output["lexical_weights"]:
-            indices = list(sp.keys())
-            values = list(sp.values())
+            indices = list(sp.keys())          # type: ignore
+            values = list(sp.values())         # type: ignore
             sparse.append({"indices": indices, "values": values})
 
         return {"dense": dense, "sparse": sparse}

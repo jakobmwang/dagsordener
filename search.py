@@ -27,3 +27,5 @@ for r in results.points:
     print(f"{r.score:.2f}  {title}")
     print(f"      {udvalg} - {dt}")
     print()
+    print(f"{p['content_md']}")
+    break

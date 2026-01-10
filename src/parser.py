@@ -2,10 +2,55 @@
 
 import re
 from datetime import datetime
+from urllib.parse import urljoin, urlparse, urlunparse
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 from markdownify import markdownify as md
 
 BASE_URL = "https://dagsordener.aarhus.dk"
+
+
+def _normalize_url(url: str, base: str = BASE_URL) -> str:
+    """Normalize URL: make absolute, clean up query params."""
+    if not url:
+        return ""
+    # Make absolute
+    full = urljoin(base, url)
+    # Parse and rebuild clean
+    parsed = urlparse(full)
+    # Remove trailing slashes, lowercase scheme/host
+    return urlunparse((
+        parsed.scheme.lower(),
+        parsed.netloc.lower(),
+        parsed.path.rstrip("/") or "/",
+        parsed.params,
+        parsed.query,
+        ""  # drop fragment
+    ))
+
+
+def _is_empty_content(el: Tag) -> bool:
+    """True if element has no meaningful text content."""
+    text = el.get_text().replace("\xa0", " ").strip()
+    return not text
+
+
+def _clean_html_before_markdown(soup: BeautifulSoup) -> None:
+    """Remove empty elements and demote headings to plain paragraphs."""
+    # Headings are usually low-signal ("Beslutninger", "Bilag") and often empty; treat as plain text.
+    for h in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
+        if not isinstance(h, Tag):
+            continue
+        if _is_empty_content(h):
+            h.decompose()
+        else:
+            h.name = "p"
+
+    for tag in soup.find_all(["p", "li"]):
+        if not isinstance(tag, Tag):
+            continue
+        if _is_empty_content(tag):
+            tag.decompose()
 
 
 def parse_meeting(html: str, meeting_url: str) -> list[dict] | None:
@@ -86,18 +131,50 @@ def _parse_punkt_row(row, meeting_id: str, udvalg: str, dt: datetime | None,
     # Clone to avoid modifying original
     content_soup = BeautifulSoup(str(details), "html.parser")
 
-    # Remove dropdown menus and other UI noise
-    for el in content_soup.select(".dropdown, .dropdown-menu, .expand"):
+    # Remove dropdown menus, badges, and other UI noise
+    for el in content_soup.select(".dropdown, .dropdown-menu, .expand, .label, .badge, .pdf-label, .lydfilnavn"):
         el.decompose()
 
     # Convert audio embeds to links
     for audio in content_soup.select("audio"):
-        source = audio.select_one("source")
-        if source and source.get("src"):
-            src = source["src"]
-            link = content_soup.new_tag("a", href=src)
+        src_attr = audio.get("src")
+        if not src_attr:
+            source_tag = audio.select_one("source")
+            if source_tag:
+                src_attr = source_tag.get("src")
+
+        href = None
+        if isinstance(src_attr, str):
+            href = src_attr
+        elif isinstance(src_attr, list) and src_attr:
+            href = src_attr[0]
+
+        if href:
+            link = content_soup.new_tag("a", href=href)
             link.string = "Lydfil"
             audio.replace_with(link)
+
+    # Extract and index all links (removes URL noise from embeddings)
+    links_list = []
+    for a in content_soup.select("a[href]"):
+        href_attr = a.get("href")
+
+        href = None
+        if isinstance(href_attr, str):
+            href = href_attr
+        elif isinstance(href_attr, list) and href_attr:
+            href = href_attr[0]
+
+        if href and not href.startswith("#") and not href.startswith("javascript:"):
+            normalized = _normalize_url(href)
+            if normalized not in links_list:
+                links_list.append(normalized)
+            idx = links_list.index(normalized)
+            # Replace with markdown-style indexed link: [text](idx)
+            link_text = a.get_text(strip=True) or f"Link {idx}"
+            a.replace_with(f"[{link_text}]({idx})")
+
+    _clean_html_before_markdown(content_soup)
 
     # Convert to markdown
     content_md = md(str(content_soup), heading_style="ATX", strip=["script", "style"])
@@ -130,6 +207,7 @@ def _parse_punkt_row(row, meeting_id: str, udvalg: str, dt: datetime | None,
         "sagsnummer": sagsnummer,
         "content_md": content_md,
         "chunk_text": chunk_text,
+        "links": links_list,  # URLs extracted, not in embedding
         "meeting_id": meeting_id,
         "udvalg": udvalg,
         "datetime": dt.isoformat() if dt else None,
