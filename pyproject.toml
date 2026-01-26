@@ -7,17 +7,14 @@ dependencies = [
   "playwright",
   "beautifulsoup4",
   "markdownify",
+  "markdown-it-py",
   "qdrant-client",
-  "smolagents"
+  "smolagents",
+  "openai",
+  "litellm",
+  "ddgs",
+  "streamlit",
+  "fastapi",
+  "uvicorn",
+  "chainlit"
 ]
-
-[project.scripts]
-dagsordener = "src.main:main"
-
-[tool.ruff]
-line-length = 100
-lint.select = ["E","F","I","UP"]
-format.quote-style = "single"
-
-[tool.uv]
-index-strategy = "unsafe-best-match"

@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-FLAGSERVE_URL = os.getenv("FLAGSERVE_URL", "http://localhost:8273")
+FLAGSERVE_URL = os.getenv("FLAGSERVE_URL", "http://flagserve:8273")
 FLAGSERVE_API_KEY = os.getenv("FLAGSERVE_API_KEY", "")
 
 def _normalize_sparse(entry: Any) -> dict:

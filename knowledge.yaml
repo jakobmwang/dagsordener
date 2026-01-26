@@ -1,0 +1,95 @@
+# Grundviden om Aarhus Byråd 2026-2029
+
+kommune: Aarhus Kommune
+valgperiode: 2026-2029
+opdateret: 2026-01-15
+
+partier:
+  ALT: Alternativet
+  DD: Danmarksdemokraterne
+  DF: Dansk Folkeparti
+  KF: Det Konservative Folkeparti
+  EL: Enhedslisten – De Rød-Grønne
+  KD: Kristendemokraterne
+  LA: Liberal Alliance
+  M: Moderaterne
+  NB: Nye Borgerlige
+  RV: Radikale Venstre
+  S: Socialdemokratiet
+  SF: Socialistisk Folkeparti
+  V: Venstre
+  UFP: Uden for parti
+
+magistrat:
+  borgmester:
+    navn: Anders Winnerskjold
+    parti: S
+  rådmænd:
+    - område: Teknik og Miljø
+      navn: Nicolaj Bang
+      parti: KF
+    - område: Sundhed og Omsorg
+      navn: Metin Lindved Aydin
+      parti: RV
+    - område: Sociale Forhold og Beskæftigelse
+      navn: Michael Christensen
+      parti: LA
+    - område: Kultur og Borgerservice
+      navn: Jesper Kjeldsen
+      parti: S
+
+udvalg:
+  - navn: Sundheds- og Omsorgsudvalget
+    formand: Anette Poulsen (S)
+    næstformand: Albert Rosenkrantz Conradsen (SF)
+  - navn: By- og Planudvalget
+  - navn: Folkeoplysningsudvalget
+    medlemmer: [Jesper Kjeldsen (S), Peter Sporleder (KF), Lotte Friis Böing (KF), Matilde Dueholm (S), Nanna Lippert Troelsen (SF), Sarah Jarsbo (EL)]
+
+nævn_og_kommissioner:
+  - navn: Bevillingsnævnet
+    beskrivelse: Behandler bevillinger til restaurationer mv.
+  - navn: Handicaprådet
+    medlemmer: [Eva Borchorst Mejnertz (S), Isabella Heilmann (EL), Louise Svenstrup (LA)]
+  - navn: Den Kommunale Valgbestyrelse
+    formand: Borgmesteren (født formand)
+  - navn: Hegnssynet
+    beskrivelse: Behandler sager om hegn mellem naboer
+  - navn: Grundlisteudvalget
+    beskrivelse: Udpeger nævninge
+
+kommunale_selskaber:
+  - navn: Østjyllands Brandvæsen I/S
+    formand: Nicolaj Bang (KF)
+  - navn: Aarhus Havn A/S
+  - navn: Aarhus Letbane I/S
+  - navn: Aarhus Vand A/S
+  - navn: Kredsløb Holding A/S
+  - navn: Midttrafik
+
+bestyrelser:
+  museer:
+    - ARoS
+    - Den Gamle By
+    - KØN – Gender Museum Denmark
+    - Moesgaard Museum
+    - Naturhistorisk Museum
+  teatre:
+    - Aarhus Teater
+    - Svalegangen
+    - Teaterhuset Filuren
+  kultur:
+    - Aarhus Festuge
+    - Den Vestdanske Filmpulje
+    - TV 2 Østjylland (repræsentantskab)
+  undervisning:
+    - Aarhus Business College
+    - Aarhus HF og VUC
+    - FGU Aarhus
+    - SOSU Østjylland
+    - Diverse gymnasier
+
+noter:
+  - "A = kan vælges ikke-byrådsmedlemmer"
+  - "B = skal udpeges byrådsmedlemmer"
+  - "* = lovpligtigt nævn/kommission/bestyrelse"

@@ -1,7 +1,8 @@
+__pycache__
+.chainlit
 .claude
+.venv
+local_tests
+samples
 .env
-.venv/
-samples/
-__pycache__/
 backfill.log
-test_search.py

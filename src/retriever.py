@@ -6,11 +6,10 @@ from typing import Iterable
 from qdrant_client import QdrantClient, models
 
 from src.embedder import Embedder
-from src.qdrant import COLLECTION, get_client
+from src.qdrant import BM25_CONFIG, QDRANT_COLLECTION, da_expand, get_client
 
 DEFAULT_LIMIT = 8
 PREFETCH_LIMIT = 128
-RERANK_LIMIT = 64
 
 
 # =============================================================================
@@ -26,12 +25,13 @@ def search(
     date_after: str | None = None,
     date_before: str | None = None,
     limit: int = DEFAULT_LIMIT,
+    prefetch_limit: int = PREFETCH_LIMIT,
     offset: int = 0,
 ) -> dict:
     """
     Search agenda items with semantic search and optional filters.
 
-    Uses hybrid search (dense + sparse vectors) with reranking for best results.
+    Uses hybrid search (dense + sparse + BM25 vectors) with RRF fusion.
 
     Args:
         query: Search text, e.g. "cykelstier i Aarhus" or "budget 2024"
@@ -64,7 +64,7 @@ def search(
     )
 
     total = client.count(
-        collection_name=COLLECTION,
+        collection_name=QDRANT_COLLECTION,
         count_filter=query_filter,
         exact=True,
     ).count
@@ -76,17 +76,24 @@ def search(
     emb = embedder.embed_single(query_text)
     dense = emb["dense"]
     sparse = models.SparseVector(indices=emb["sparse"]["indices"], values=emb["sparse"]["values"])
+    expanded_query = da_expand(query_text)
+    bm25_text = f"{query_text} {expanded_query}" if expanded_query != query_text else query_text
+    bm25_query = models.Document(
+        text=bm25_text,
+        model="Qdrant/Bm25",
+        options=BM25_CONFIG,
+    )
 
-    prefetch_limit = min(PREFETCH_LIMIT, total)
-    rerank_limit = min(RERANK_LIMIT, total)
-    fetch_limit = max(rerank_limit, limit + offset)
+    prefetch_limit = min(prefetch_limit, total)
+    fetch_limit = limit + offset
 
     results = client.query_points(
-        collection_name=COLLECTION,
+        collection_name=QDRANT_COLLECTION,
         query=models.FusionQuery(fusion=models.Fusion.RRF),
         prefetch=[
             models.Prefetch(query=dense, using="dense", limit=prefetch_limit, filter=query_filter),
             models.Prefetch(query=sparse, using="sparse", limit=prefetch_limit, filter=query_filter),
+            models.Prefetch(query=bm25_query, using="bm25", limit=prefetch_limit, filter=query_filter),
         ],
         query_filter=query_filter,
         limit=fetch_limit,
@@ -97,21 +104,7 @@ def search(
     if not points:
         return {"items": [], "total": total, "has_more": False}
 
-    rerank_count = min(rerank_limit, len(points))
-    if rerank_count > 1:
-        docs = [build_doc_text(p.payload or {}) for p in points[:rerank_count]]
-        reranked = embedder.rerank(query_text, docs)
-        ordered = []
-        seen = set()
-        for idx, score in reranked:
-            if 0 <= idx < rerank_count and idx not in seen:
-                ordered.append(record_to_dict(points[idx], score=score))
-                seen.add(idx)
-        for idx in range(rerank_count):
-            if idx not in seen:
-                ordered.append(record_to_dict(points[idx]))
-    else:
-        ordered = [record_to_dict(p) for p in points]
+    ordered = [record_to_dict(p) for p in points]
 
     items = ordered[offset : offset + limit]
     has_more = offset + limit < len(ordered) or len(ordered) < total
@@ -143,7 +136,7 @@ def get_case(sagsnummer: str) -> list[dict]:
     query_filter = build_filter(sagsnummer=sagsnummer.strip())
 
     records = scroll_all(client, query_filter)
-    records.sort(key=lambda r: r["payload"].get("datetime", ""), reverse=True)
+    records.sort(key=lambda r: (r["payload"].get("datetime", ""), r["payload"].get("index", 0)), reverse=True)
 
     return records
 
@@ -198,7 +191,7 @@ def get_point(punkt_id: str) -> dict | None:
         return None
 
     client = get_client()
-    records = client.retrieve(collection_name=COLLECTION, ids=[punkt_id.strip()], with_payload=True)
+    records = client.retrieve(collection_name=QDRANT_COLLECTION, ids=[punkt_id.strip()], with_payload=True)
 
     if not records:
         return None
@@ -269,22 +262,13 @@ def record_to_dict(record, score: float | None = None) -> dict:
     }
 
 
-def build_doc_text(payload: dict) -> str:
-    """Build text for reranking from payload."""
-    title = payload.get("title") or ""
-    content = payload.get("content_md") or ""
-    if title and content:
-        return f"{title}\n\n{content}"
-    return title or content
-
-
 def scroll_all(client: QdrantClient, query_filter: models.Filter | None) -> list[dict]:
     """Fetch all items matching a filter via scroll."""
     records = []
     offset = None
     while True:
         batch, next_offset = client.scroll(
-            collection_name=COLLECTION,
+            collection_name=QDRANT_COLLECTION,
             scroll_filter=query_filter,
             limit=256,
             offset=offset,

@@ -10,7 +10,7 @@ from markdownify import markdownify as md
 BASE_URL = "https://dagsordener.aarhus.dk"
 
 
-def _normalize_url(url: str, base: str = BASE_URL) -> str:
+def normalize_url(url: str, base: str = BASE_URL) -> str:
     """Normalize URL: make absolute, clean up query params."""
     if not url:
         return ""
@@ -29,27 +29,25 @@ def _normalize_url(url: str, base: str = BASE_URL) -> str:
     ))
 
 
-def _is_empty_content(el: Tag) -> bool:
+def is_empty_content(el: Tag) -> bool:
     """True if element has no meaningful text content."""
     text = el.get_text().replace("\xa0", " ").strip()
     return not text
 
 
-def _clean_html_before_markdown(soup: BeautifulSoup) -> None:
+def clean_html_before_markdown(soup: BeautifulSoup) -> None:
     """Remove empty elements and demote headings to plain paragraphs."""
     # Headings are usually low-signal ("Beslutninger", "Bilag") and often empty; treat as plain text.
     for h in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
         if not isinstance(h, Tag):
             continue
-        if _is_empty_content(h):
+        if is_empty_content(h):
             h.decompose()
-        else:
-            h.name = "p"
 
     for tag in soup.find_all(["p", "li"]):
         if not isinstance(tag, Tag):
             continue
-        if _is_empty_content(tag):
+        if is_empty_content(tag):
             tag.decompose()
 
 
@@ -84,24 +82,24 @@ def parse_meeting(html: str, meeting_url: str) -> list[dict] | None:
         return None
 
     # Extract meeting metadata
-    udvalg = _get_text(soup, "span.udvalg")
-    dato_text = _get_text(soup, "span.dato")
-    sted = _get_text(soup, "span.sted")
-    dt = _parse_danish_datetime(dato_text)
+    udvalg = get_text(soup, "span.udvalg")
+    dato_text = get_text(soup, "span.dato")
+    sted = get_text(soup, "span.sted")
+    dt = parse_danish_datetime(dato_text)
 
     # Parse each punkt
     punkter = []
     rows = soup.select("tr.punktrow")
 
     for row in rows:
-        punkt = _parse_punkt_row(row, meeting_id, udvalg, dt, sted, meeting_type)
+        punkt = parse_punkt_row(row, meeting_id, udvalg, dt, sted, meeting_type)
         if punkt:
             punkter.append(punkt)
 
     return punkter
 
 
-def _parse_punkt_row(row, meeting_id: str, udvalg: str, dt: datetime | None,
+def parse_punkt_row(row, meeting_id: str, udvalg: str, dt: datetime | None,
                       sted: str, meeting_type: str) -> dict | None:
     """Parse a single punkt row into a dict."""
     # Get punkt ID from row id="punktrow_{uuid}"
@@ -131,8 +129,8 @@ def _parse_punkt_row(row, meeting_id: str, udvalg: str, dt: datetime | None,
     # Clone to avoid modifying original
     content_soup = BeautifulSoup(str(details), "html.parser")
 
-    # Remove dropdown menus, badges, and other UI noise
-    for el in content_soup.select(".dropdown, .dropdown-menu, .expand, .label, .badge, .pdf-label, .lydfilnavn"):
+    # Remove dropdown menus, badges, sagsnummer (extracted as metadata), and other UI noise
+    for el in content_soup.select(".dropdown, .dropdown-menu, .expand, .label, .badge, .pdf-label, .lydfilnavn, .sagsnummer"):
         el.decompose()
 
     # Convert audio embeds to links
@@ -166,7 +164,7 @@ def _parse_punkt_row(row, meeting_id: str, udvalg: str, dt: datetime | None,
             href = href_attr[0]
 
         if href and not href.startswith("#") and not href.startswith("javascript:"):
-            normalized = _normalize_url(href)
+            normalized = normalize_url(href)
             if normalized not in links_list:
                 links_list.append(normalized)
             idx = links_list.index(normalized)
@@ -174,11 +172,12 @@ def _parse_punkt_row(row, meeting_id: str, udvalg: str, dt: datetime | None,
             link_text = a.get_text(strip=True) or f"Link {idx}"
             a.replace_with(f"[{link_text}]({idx})")
 
-    _clean_html_before_markdown(content_soup)
+    clean_html_before_markdown(content_soup)
 
     # Convert to markdown
     content_md = md(str(content_soup), heading_style="ATX", strip=["script", "style"])
-    content_md = _clean_markdown(content_md)
+    content_md = promote_emphasis_headers(content_md)
+    content_md = clean_markdown(content_md)
 
     # Build canonical URL
     punkt_url = f"{BASE_URL}/vis?id={meeting_id}&punktid={punkt_id}"
@@ -216,13 +215,13 @@ def _parse_punkt_row(row, meeting_id: str, udvalg: str, dt: datetime | None,
     }
 
 
-def _get_text(soup: BeautifulSoup, selector: str) -> str:
+def get_text(soup: BeautifulSoup, selector: str) -> str:
     """Get text from first matching element."""
     el = soup.select_one(selector)
     return el.get_text(strip=True) if el else ""
 
 
-def _parse_danish_datetime(text: str) -> datetime | None:
+def parse_danish_datetime(text: str) -> datetime | None:
     """Parse Danish datetime string like 'onsdag den 1. oktober 2025 kl. 15.45'"""
     if not text:
         return None
@@ -253,10 +252,22 @@ def _parse_danish_datetime(text: str) -> datetime | None:
     return datetime(year, month, day, hour, minute)
 
 
-def _clean_markdown(text: str) -> str:
+def clean_markdown(text: str) -> str:
     """Clean up markdown text."""
-    # Remove excessive blank lines
+    # Remove per-line trailing white space and excessive blank lines
+    text = re.sub(r"[^\S\n]*\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
-    # Strip leading/trailing whitespace
+    # Strip document-level leading/trailing whitespace
     text = text.strip()
     return text
+
+
+def promote_emphasis_headers(text: str) -> str:
+    """Convert bold/italic-only lines into H5 headers."""
+    pattern = re.compile(r"(?m)^\s*\*{1,2}([^\n]+?)\*{1,2}\s*$")
+
+    def replace(match: re.Match) -> str:
+        content = match.group(1).strip()
+        return f"##### {content}" if content else match.group(0)
+
+    return pattern.sub(replace, text)

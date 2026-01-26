@@ -1,4 +1,75 @@
 services:
+  search:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+    environment:
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-dagsordener}
+      - FLAGSERVE_URL=${FLAGSERVE_URL:-http://flagserve:8273}
+      - FLAGSERVE_API_KEY=${FLAGSERVE_API_KEY:-}
+    depends_on:
+      - qdrant
+      - flagserve
+    restart: unless-stopped
+
+  chainlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.chainlit
+    ports:
+      - "8001:8001"
+    environment:
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-dagsordener}
+      - FLAGSERVE_URL=http://flagserve:8273
+      - FLAGSERVE_API_KEY=${FLAGSERVE_API_KEY:-}
+    depends_on:
+      - qdrant
+      - flagserve
+    restart: unless-stopped
+
+  completions:
+    build: .
+    command: ["python", "-m", "uvicorn", "completions:app", "--host", "0.0.0.0", "--port", "8002"]
+    ports:
+      - "8002:8002"
+    environment:
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-dagsordener}
+      - FLAGSERVE_URL=http://flagserve:8273
+      - FLAGSERVE_API_KEY=${FLAGSERVE_API_KEY:-}
+      - COMPLETIONS_API_KEY=${COMPLETIONS_API_KEY:-}
+    depends_on:
+      - qdrant
+      - flagserve
+    restart: unless-stopped
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://completions:8002/v1
+      - OPENAI_API_KEY=${COMPLETIONS_API_KEY:-dummy}
+      - WEBUI_AUTH=false
+    volumes:
+      - openwebui_data:/app/backend/data
+    depends_on:
+      - completions
+    restart: unless-stopped
+
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -6,6 +77,7 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    restart: unless-stopped
 
   flagserve:
     image: jakobmwang/flagserve:latest
@@ -37,3 +109,4 @@ services:
 volumes:
   qdrant_data:
   hf-cache:
+  openwebui_data:

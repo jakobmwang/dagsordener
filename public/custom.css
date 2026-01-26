@@ -1,0 +1,34 @@
+/* Warning banner */
+body::before {
+    content: "⚠️ DEMO - POC/MVP TEST - IKKE PÅLIDELIG - KAN INDEHOLDE FEJL ⚠️";
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #dc2626;
+    color: white;
+    text-align: center;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 13px;
+    z-index: 9999;
+    letter-spacing: 0.5px;
+    box-sizing: border-box;
+    height: 38px;
+}
+
+/* Push all content down to make room for banner */
+body {
+    padding-top: 38px !important;
+}
+
+#root {
+    margin-top: 0 !important;
+}
+
+/* Also push any fixed/sticky headers down */
+header, [class*="header"], [class*="Header"], nav {
+    top: 38px !important;
+}
+
